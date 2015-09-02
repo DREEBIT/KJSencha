@@ -16,7 +16,7 @@ return array(
             $apiFactory = $sl->get('kjsencha.api');
 
             $controller = new Controller\DirectController($manager, $apiFactory);
-            $controller->setDebugMode($config['kjsencha']['debug_mode']);
+	        $controller->setExceptionMode($config['kjsencha']['show_exceptions']);
 
             return $controller;
         },

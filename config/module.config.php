@@ -58,6 +58,12 @@ return array(
          * Debug mode is used to show more information when server exceptions occur
          */
         'debug_mode' => false,
+	    'errors' => array(
+			'show_exceptions' => array(
+			    'message' => true,
+			    'trace'   => true,
+			),
+	    ),
     ),
 
     'view_manager' => array(

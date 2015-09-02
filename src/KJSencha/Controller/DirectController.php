@@ -21,248 +21,265 @@ use Zend\View\Model\JsonModel;
  */
 class DirectController extends AbstractController
 {
-    /**
-     * @var \KJSencha\Direct\DirectManager
-     */
-    protected $manager;
-    /**
-     * @var Api
-     */
-    protected $api;
+	/**
+	 * @var \KJSencha\Direct\DirectManager
+	 */
+	protected $manager;
+	/**
+	 * @var Api
+	 */
+	protected $api;
 
-    /**
-     * @var array
-     */
-    protected $rpcs;
+	/**
+	 * @var array
+	 */
+	protected $rpcs;
 
-    /**
-     * @var boolean
-     */
-    protected $debugMode;
+	/**
+	 * @var array
+	 */
+	protected $errorMode;
 
-    /**
-     * @param DirectManager $manager
-     * @param Api           $api
-     */
-    public function __construct(DirectManager $manager, Api $api)
-    {
-        $this->manager = $manager;
-        $this->api = $api;
-        $this->setDebugMode(false);
+	/**
+	 * @param DirectManager $manager
+	 * @param Api           $api
+	 */
+	public function __construct(DirectManager $manager, Api $api)
+	{
+		$this->manager = $manager;
+		$this->api = $api;
+		$this->setExceptionMode(array(
+			'message' => FALSE,
+			'trace' => FALSE
+		));
 
-    }
+	}
 
-    /**
-     * Is it a upload request
-     *
-     * @return boolean
-     */
-    public function isUpload()
-    {
-        return ($this->params()->fromPost('extUpload') === 'true');
-    }
+	/**
+	 * Is it a upload request
+	 *
+	 * @return boolean
+	 */
+	public function isUpload()
+	{
+		return ($this->params()->fromPost('extUpload') === 'true');
+	}
 
-    /**
-     * Is this a form request
-     *
-     * @return boolean
-     */
-    public function isForm()
-    {
-        return (boolean) $this->params()->fromPost('extAction', false);
-    }
+	/**
+	 * Is this a form request
+	 *
+	 * @return boolean
+	 */
+	public function isForm()
+	{
+		return (boolean) $this->params()->fromPost('extAction', false);
+	}
 
-    /**
-     * @param boolean $debugMode
-     */
-    public function setDebugMode($debugMode)
-    {
-        $this->debugMode = (boolean) $debugMode;
-    }
 
-    /**
-     * @return boolean
-     */
-    public function isDebugMode()
-    {
-        return $this->debugMode;
-    }
+	/**
+	 * @param array $exceptionMode
+	 */
+	public function setExceptionMode($exceptionMode)
+	{
+		$this->errorMode = (array) $exceptionMode;
+	}
 
-    /**
-     * Dispatch controller
-     *
-     * @param  MvcEvent $mvcEvent
-     * @return string
-     * @throws Exception
-     */
-    public function onDispatch(MvcEvent $mvcEvent)
-    {
-        $result = $this->dispatchRPCS();
 
-        // Build a valid upload response and directly return the result
-        if ($this->isForm() && $this->isUpload()) {
-            $result = $this->buildFormUploadResponse($result);
-            return $this->getResponse()
-                 ->setContent($result);
-        }
+	/**
+	 * @return boolean
+	 */
+	public function showExceptionMessage()
+	{
+		return isset($this->errorMode['message']) ? $this->errorMode['message'] : FALSE;
+	}
 
-        $mvcEvent->setResult(new JsonModel($result));
 
-        return $mvcEvent;
-    }
+	/**
+	 * @return boolean
+	 */
+	public function showExceptionTrace()
+	{
+		return isset($this->errorMode['trace']) ? $this->errorMode['trace'] : FALSE;
+	}
 
-    /**
-     * Build a valid upload response, the response expects the json result
-     * to be wrapped with <html><body><textarea>(json)</textarea></body></html>
-     *
-     * @param string $content
-     * @return string Content wrapped in a valid format
-     */
-    protected function buildFormUploadResponse($content)
-    {
-        $json = JsonFormatter::encode($content);
-        $json = preg_replace("/&quot;/", '\\&quot;', $json);
 
-        return '<html><body><textarea>' . $json . '</textarea></body></html>';
-    }
+	/**
+	 * Dispatch controller
+	 *
+	 * @param  MvcEvent $mvcEvent
+	 * @return string
+	 * @throws Exception
+	 */
+	public function onDispatch(MvcEvent $mvcEvent)
+	{
+		$result = $this->dispatchRPCS();
 
-    /**
-     * Dispatches the RPCS from the current request and returns the result
-     *
-     * @return array
-     * @throws Exception
-     */
-    protected function dispatchRPCS()
-    {
-        $rpcs = $this->getRPC();
+		// Build a valid upload response and directly return the result
+		if ($this->isForm() && $this->isUpload()) {
+			$result = $this->buildFormUploadResponse($result);
+			return $this->getResponse()
+				->setContent($result);
+		}
 
-        $result = array();
+		$mvcEvent->setResult(new JsonModel($result));
 
-        if ($rpcs instanceof RPC) {
-            $result = $this->dispatchRPC($rpcs);
-        } elseif (is_array($rpcs)) {
-            foreach ($rpcs as $rpc) {
-                $result[] = $this->dispatchRPC($rpc);
-            }
-        } else {
-            throw new Exception('Invalid direct request');
-        }
+		return $mvcEvent;
+	}
 
-        return $result;
-    }
+	/**
+	 * Build a valid upload response, the response expects the json result
+	 * to be wrapped with <html><body><textarea>(json)</textarea></body></html>
+	 *
+	 * @param string $content
+	 * @return string Content wrapped in a valid format
+	 */
+	protected function buildFormUploadResponse($content)
+	{
+		$json = JsonFormatter::encode($content);
+		$json = preg_replace("/&quot;/", '\\&quot;', $json);
 
-    /**
-     * Retrieve the RPCS from the request
-     *
-     * @return array
-     */
-    protected function getRPC()
-    {
-        if (null == $this->rpcs) {
+		return '<html><body><textarea>' . $json . '</textarea></body></html>';
+	}
 
-            $request = $this->getRequest();
+	/**
+	 * Dispatches the RPCS from the current request and returns the result
+	 *
+	 * @return array
+	 * @throws Exception
+	 */
+	protected function dispatchRPCS()
+	{
+		$rpcs = $this->getRPC();
 
-            if ($this->isForm()) {
-                $post = $this->params()->fromPost();
-                $rpc = array(
-                    'action'	=> $post['extAction'],
-                    'method'    => $post['extMethod'],
-                    'tid'		=> $post['extTID'],
-                    'module'    => $post['extModule'],
-                    'data'		=> ArrayUtils::merge($post, $this->params()->fromFiles())
-                );
-                $this->rpcs = RPC::factory($rpc);
-            } else {
-                $rpcs = array();
+		$result = array();
 
-                if ($request->getContent()) {
-                    $rpcs = json_decode($GLOBALS['HTTP_RAW_POST_DATA'], true);
-                } elseif ($this->params()->fromQuery('callback')) {
-                    $rpcs = json_decode($this->params()->fromQuery('data'), true);
-                }
+		if ($rpcs instanceof RPC) {
+			$result = $this->dispatchRPC($rpcs);
+		} elseif (is_array($rpcs)) {
+			foreach ($rpcs as $rpc) {
+				$result[] = $this->dispatchRPC($rpc);
+			}
+		} else {
+			throw new Exception('Invalid direct request');
+		}
 
-                // TODO valid json check
-                // Convert assoc array to array
-                if (ArrayUtils::isHashTable($rpcs)) {
-                    $rpcs = array($rpcs);
-                }
+		return $result;
+	}
 
-                $this->rpcs = array();
+	/**
+	 * Retrieve the RPCS from the request
+	 *
+	 * @return array
+	 */
+	protected function getRPC()
+	{
+		if (null == $this->rpcs) {
 
-                foreach ($rpcs as $rpc) {
-                    $this->rpcs[] = RPC::factory($rpc);
-                }
-            }
-        }
+			$request = $this->getRequest();
 
-        return $this->rpcs;
-    }
+			if ($this->isForm()) {
+				$post = $this->params()->fromPost();
+				$rpc = array(
+					'action'	=> $post['extAction'],
+					'method'    => $post['extMethod'],
+					'tid'		=> $post['extTID'],
+					'module'    => $post['extModule'],
+					'data'		=> ArrayUtils::merge($post, $this->params()->fromFiles())
+				);
+				$this->rpcs = RPC::factory($rpc);
+			} else {
+				$rpcs = array();
 
-    /**
-     * Run the RPC and return its output
-     *
-     * @param  RPC       $rpc
-     * @return array
-     * @throws Exception when parameters are not valid
-     */
-    protected function dispatchRPC(RPC $rpc)
-    {
-        $response = array(
-            'type'      => 'rpc',
-            'tid'       => $rpc->getId(),
-            'action'    => $rpc->getAction(),
-            'method'    => $rpc->getMethod(),
-            'result'    => null,
-        );
+				if ($request->getContent()) {
+					$rpcs = json_decode($GLOBALS['HTTP_RAW_POST_DATA'], true);
+				} elseif ($this->params()->fromQuery('callback')) {
+					$rpcs = json_decode($this->params()->fromQuery('data'), true);
+				}
 
-        if (!$this->api->hasAction($rpc->getAction())) {
-            throw new Exception('Action ' . $rpc->getAction() . ' does not exist');
-        }
+				// TODO valid json check
+				// Convert assoc array to array
+				if (ArrayUtils::isHashTable($rpcs)) {
+					$rpcs = array($rpcs);
+				}
 
-        $action = $this->api->getAction($rpc->getAction());
+				$this->rpcs = array();
 
-        // Verify the method exists
-        if (!$action->hasMethod($rpc->getMethod())) {
-            throw new Exception('Method ' . $rpc->getMethod() . ' does not exist');
-        }
+				foreach ($rpcs as $rpc) {
+					$this->rpcs[] = RPC::factory($rpc);
+				}
+			}
+		}
 
-        // Verify that we received enough parameters to call the method
-        if ($action->getMethod($rpc->getMethod())->getNumberOfParameters() > count($rpc->getData())) {
-            throw new Exception('Invalid parameter count');
-        }
+		return $this->rpcs;
+	}
 
-        $object = $this->manager->get($action->getObjectName());
+	/**
+	 * Run the RPC and return its output
+	 *
+	 * @param  RPC       $rpc
+	 * @return array
+	 * @throws Exception when parameters are not valid
+	 */
+	protected function dispatchRPC(RPC $rpc)
+	{
+		$response = array(
+			'type'      => 'rpc',
+			'tid'       => $rpc->getId(),
+			'action'    => $rpc->getAction(),
+			'method'    => $rpc->getMethod(),
+			'result'    => null,
+		);
 
-        // Trigger a RPC dispatch event
-        $eventVars = array(
-            'object' => $object,
-            'rpc'    => $rpc,
-        );
+		if (!$this->api->hasAction($rpc->getAction())) {
+			throw new Exception('Action ' . $rpc->getAction() . ' does not exist');
+		}
 
-        $result = $this->getEventManager()->trigger(DirectEvent::EVENT_DISPATCH_RPC, $this, $eventVars);
+		$action = $this->api->getAction($rpc->getAction());
 
-        if ($result->stopped()) {
-            return $result->last();
-        }
+		// Verify the method exists
+		if (!$action->hasMethod($rpc->getMethod())) {
+			throw new Exception('Method ' . $rpc->getMethod() . ' does not exist');
+		}
 
-        try {
-            // Fetch result from the function call
-            $response['result'] = call_user_func_array(array($object, $rpc->getMethod()), $rpc->getData());
-        } catch (Exception $e) {
-            $error = array(
-                'type'      => 'exception',
-                'message'   => 'An unhandled exception occured',
-                'where'     => ''
-            );
+		// Verify that we received enough parameters to call the method
+		if ($action->getMethod($rpc->getMethod())->getNumberOfParameters() > count($rpc->getData())) {
+			throw new Exception('Invalid parameter count');
+		}
 
-            if ($this->isDebugMode()) {
-                $error['message'] = $e->getMessage();
-                $error['where'] = $e->getTraceAsString();
-            }
+		$object = $this->manager->get($action->getObjectName());
 
-            $response = $error;
-        }
+		// Trigger a RPC dispatch event
+		$eventVars = array(
+			'object' => $object,
+			'rpc'    => $rpc,
+		);
 
-        return $response;
-    }
+		$result = $this->getEventManager()->trigger(DirectEvent::EVENT_DISPATCH_RPC, $this, $eventVars);
+
+		if ($result->stopped()) {
+			return $result->last();
+		}
+
+		try {
+			// Fetch result from the function call
+			$response['result'] = call_user_func_array(array($object, $rpc->getMethod()), $rpc->getData());
+		} catch (Exception $e) {
+			$error = array(
+				'type'      => 'exception',
+				'message'   => 'An unhandled exception occured'
+			);
+
+			if ($this->showExceptionMessage()) {
+				$error['message'] = $e->getMessage();
+			}
+
+			if ($this->showExceptionTrace()) {
+				$error['where'] = $e->getTraceAsString();
+			}
+
+			$response = $error;
+		}
+
+		return $response;
+	}
 }
